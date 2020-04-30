@@ -10,7 +10,7 @@ from tqdm import tqdm
 import transformer.Constants as Constants
 from torchtext.data import Dataset
 
-from Transformer import Transformer, get_pad_mask, get_subsequent_mask
+from transformer import Transformer, get_pad_mask, get_subsequent_mask
 
 
 
