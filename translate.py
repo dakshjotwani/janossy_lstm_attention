@@ -7,11 +7,10 @@ import argparse
 import dill as pickle
 from tqdm import tqdm
 
-import transformer.Constants as Constants
 from torchtext.data import Dataset
 
 from transformer import Transformer, get_pad_mask, get_subsequent_mask
-
+from transformer import Constants
 
 
 
@@ -137,6 +136,7 @@ class Translator(nn.Module):
 
 # from transformer.Models import Transformer
 # from transformer.Translator import Translator
+# import transformer.Constants as Constants
 
 
 def load_model(opt, device):
