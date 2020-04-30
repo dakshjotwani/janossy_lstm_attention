@@ -127,7 +127,7 @@ def eval_epoch(model, validation_data, device, opt):
     return loss_per_word, accuracy
 
 
-def train(model, training_data, validation_data, optimizer, device, opt):
+def train(model, training_data, validation_data, optimizer, device, opt, continue_from_epoch=-1):
     ''' Start training '''
 
     log_train_file, log_valid_file = None, None
@@ -152,6 +152,9 @@ def train(model, training_data, validation_data, optimizer, device, opt):
     #valid_accus = []
     valid_losses = []
     for epoch_i in range(opt.epoch):
+        if epoch_i <= continue_from_epoch:
+            print('[ Epoch', epoch_i, ' already trained]')
+            continue
         print('[ Epoch', epoch_i, ']')
 
         start = time.time()
@@ -165,7 +168,7 @@ def train(model, training_data, validation_data, optimizer, device, opt):
 
         valid_losses += [valid_loss]
 
-        checkpoint = {'epoch': epoch_i, 'settings': opt, 'model': model.state_dict()}
+        checkpoint = {'epoch': epoch_i, 'settings': opt, 'model': model.state_dict(), 'optimizer': optimizer.state_dict()}
 
         if opt.save_model:
             if opt.save_mode == 'all':
@@ -218,11 +221,25 @@ def main():
     parser.add_argument('-log', default=None)
     parser.add_argument('-save_model', default=None)
     parser.add_argument('-save_mode', type=str, choices=['all', 'best'], default='best')
+    parser.add_argument('-load_model', default=None)
+    parser.add_argument('-copy_opt', action='store_true')
 
     parser.add_argument('-no_cuda', action='store_true')
     parser.add_argument('-label_smoothing', action='store_true')
 
     opt = parser.parse_args()
+
+    if opt.load_model:
+        print('[Loading Model]')
+        model_name = opt.load_model + '.chkpt'
+        checkpoint = torch.load(model_name)
+        if opt.copy_opt:
+            print('[Copying Arguments From Checkpoint (excluding epoch)]')
+            temp = opt.epoch, opt.load_model, opt.copy_opt
+            opt = checkpoint['settings']
+            opt.epoch, opt.load_model, opt.copy_opt = temp
+        
+
     opt.cuda = not opt.no_cuda
     opt.d_word_vec = opt.d_model
 
@@ -268,6 +285,16 @@ def main():
     optimizer = ScheduledOptim(
         optim.Adam(transformer.parameters(), betas=(0.9, 0.98), eps=1e-09),
         2.0, opt.d_model, opt.n_warmup_steps)
+    
+    if opt.load_model:
+        model_name = opt.load_model + '.chkpt'
+        checkpoint = torch.load(model_name)
+        continue_from_epoch = checkpoint['epoch']
+        transformer.load_state_dict(checkpoint['model'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        train(transformer, training_data, validation_data, optimizer, device, opt, continue_from_epoch=continue_from_epoch)
+        return
+
 
     train(transformer, training_data, validation_data, optimizer, device, opt)
 

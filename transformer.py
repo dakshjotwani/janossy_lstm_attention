@@ -30,7 +30,7 @@ class ScaledDotProductAttention(nn.Module):
         self.dropout = nn.Dropout(attn_dropout)
 
     def forward(self, q, k, v, mask=None):
-        print('scaleddpa', q.size(), k.size(), v.size())
+#         print('scaleddpa', q.size(), k.size(), v.size())
         attn = torch.matmul(q / self.temperature, k.transpose(2, 3))
 
         if mask is not None:
@@ -38,7 +38,7 @@ class ScaledDotProductAttention(nn.Module):
 
         attn = self.dropout(F.softmax(attn, dim=-1))
         output = torch.matmul(attn, v)
-        print('scaleddpa out:', output.size(), attn.size())
+#         print('scaleddpa out:', output.size(), attn.size())
 
         return output, attn
 
@@ -392,3 +392,9 @@ class ScheduledOptim():
         for param_group in self._optimizer.param_groups:
             param_group['lr'] = lr
 
+    def state_dict(self):
+        return {'optim': self._optimizer.state_dict(), 'n_steps': self.n_steps}
+    
+    def load_state_dict(self, state_dict):
+        self._optimizer.load_state_dict(state_dict['optim'])
+        self.n_steps = state_dict['n_steps']
