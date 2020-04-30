@@ -37,9 +37,7 @@ def cal_loss(pred, gold, trg_pad_idx, smoothing=False):
     ''' Calculate cross entropy loss, apply label smoothing if needed. '''
 
     gold = gold.contiguous().view(-1)
-    print('calloss', pred.size(), gold.size(), trg_pad_idx)
-    print('\titems', pred[0,0:10], gold[0])
-    exit()
+
     if smoothing:
         eps = 0.1
         n_class = pred.size(1)
@@ -78,11 +76,11 @@ def train_epoch(model, training_data, optimizer, opt, device, smoothing):
         # prepare data
         src_seq = patch_src(batch.src, opt.src_pad_idx).to(device)
         trg_seq, gold = map(lambda x: x.to(device), patch_trg(batch.trg, opt.trg_pad_idx))
-        print('batch')
-        # src_seq.size == (batch, xxx) xxx is random, length?
-        print(trg_seq.size())
-        print(trg_seq)
-        exit()
+
+        # src_seq.size == (batch, xxx) xxx is random, length of longest sentance in batch
+        # each row of trg is word#1 ... word#n-1
+        # gold is vector of length trg.size(0)*trg.size(1), and its = sen1.word#2, ... sen1.word#n, sen2.word#2, ...
+        # target meaning: ['<unk>', '<blank>', '<s>', '</s>', 'a', '.', 'in', 'the', 'on', 'man', ...]
 
         # forward
         optimizer.zero_grad()
@@ -98,6 +96,7 @@ def train_epoch(model, training_data, optimizer, opt, device, smoothing):
         n_word_total += n_word
         n_word_correct += n_correct
         total_loss += loss.item()
+    
 
     loss_per_word = total_loss/n_word_total
     accuracy = n_word_correct/n_word_total
