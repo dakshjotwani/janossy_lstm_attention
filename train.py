@@ -37,7 +37,9 @@ def cal_loss(pred, gold, trg_pad_idx, smoothing=False):
     ''' Calculate cross entropy loss, apply label smoothing if needed. '''
 
     gold = gold.contiguous().view(-1)
-
+    print('calloss', pred.size(), gold.size(), trg_pad_idx)
+    print('\titems', pred[0,0:10], gold[0])
+    exit()
     if smoothing:
         eps = 0.1
         n_class = pred.size(1)
@@ -73,10 +75,14 @@ def train_epoch(model, training_data, optimizer, opt, device, smoothing):
 
     desc = '  - (Training)   '
     for batch in tqdm(training_data, mininterval=2, desc=desc, leave=False):
-
         # prepare data
         src_seq = patch_src(batch.src, opt.src_pad_idx).to(device)
         trg_seq, gold = map(lambda x: x.to(device), patch_trg(batch.trg, opt.trg_pad_idx))
+        print('batch')
+        # src_seq.size == (batch, xxx) xxx is random, length?
+        print(trg_seq.size())
+        print(trg_seq)
+        exit()
 
         # forward
         optimizer.zero_grad()
@@ -151,9 +157,11 @@ def train(model, training_data, validation_data, optimizer, device, opt, continu
 
     #valid_accus = []
     valid_losses = []
+    if continue_from_epoch >= 0:
+        print('[ Epoch 1 -', continue_from_epoch, ' already trained]')
+
     for epoch_i in range(opt.epoch):
         if epoch_i <= continue_from_epoch:
-            print('[ Epoch', epoch_i, ' already trained]')
             continue
         print('[ Epoch', epoch_i, ']')
 
