@@ -332,3 +332,5 @@ def prepare_dataloaders(opt, device):
 
     return train_iterator, val_iterator
 
+if __name__ == '''__main__''':
+    main()
