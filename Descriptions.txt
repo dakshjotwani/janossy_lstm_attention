@@ -1,0 +1,191 @@
+MultiHeadAttention:
+    INPUT/SHAPES:
+        q,k,v : 
+            [batch, len_q, dim_model] (Note: dim_model == dim_word_vec)
+        mask (boolean):
+            (note: mask input is 3-dim / dim[1] is unsqueezed in the middle of MultiHeadAttention)
+            [batch, 1, 1, len_q] if encoder
+            [batch, 1, len_q, len_q] if decoder
+    
+    OUTPUT/SHAPES: 
+        out : [batch, len_q, dim_model] 
+        attn : [batch, n_head, len_q, len_q]
+        
+    MODULES:
+        FC_q: dim_model x n_head*dim_k
+        FC_k: dim_model x n_head*dim_k
+        FC_v: dim_model x n_head*dim_v
+        FC_out: n_head*dim_v x dim_model
+        2 Dropout
+        Layer_Norm
+    
+    DESCRIPTION:
+        1: apply Layer_Norm on q
+        2: pass q,k,v each through FC to get [batch, len_q, n_head, dim_k/dim_v]
+        3: transpose q/k/v q:[batch, n_head, len_q, dim_k] k:[batch, n_head, dim_k, len_q] v:[batch, n_head, len_q, dim_v]
+        4: get ATTN by (q/(dim_q**0.5) X k) to get [batch, n_head, len_q, len_q]
+        5: mask ATTN
+        6: apply softmax on last ATTN dim
+        7: apply dropout on ATTN
+        8: get OUT by (attn X v) to get [batch, n_head, len_q, dim_v]
+        9: reshape OUT to [batch, len_q, n_head*dim_v]
+        10: pass OUT through FC to get [batch, len_q, dim_model]
+        11: apply dropout on OUT
+        12: sum OUT with input q to get final result (thus dim_v == dim_model)
+        
+        
+        
+        
+        
+PositionwiseFeedForward:
+    INPUT/SHAPES:
+        x: [batch, len_q, dim_model] (Note: MultiHeadAttention output)
+    
+    OUTPUT/SHAPES: 
+        out : [batch, len_q, dim_model]
+        
+    MODULES:
+        FC_1: dim_model x dim_inner
+        FC_2: dim_inner x dim_model
+        RELU
+        Dropout
+        Layer_Norm
+    
+    DESCRIPTION:
+        1: apply Layer_Norm on x
+        2: pass x through FC_1 to get [batch, len_q, dim_inner]
+        3: apply RELU on x
+        4: pass x through FC_2 to get [batch, len_q, dim_model]
+        5: apply dropout on x
+        6: sum x with original input x to get final result
+
+
+
+
+
+EncoderLayer:
+    INPUT/SHAPES:
+        enc_input: [batch, len_q, dim_model]
+        slf_attn_mask: [batch, 1, len_q]
+        
+    OUTPUT/SHAPES: 
+        enc_output : [batch, len_q, dim_model]
+        enc_slf_attn : [batch, n_head, len_q, len_q]
+
+    MODULES:
+        MultiHeadAttention
+        PositionwiseFeedForward
+    
+    DESCRIPTION:
+        1: get x and ENC_SLF_ATTN by passing through MultiHeadAttention with q,k,v,mask = enc_input, enc_input, enc_input, slf_attn_mask
+        2: get ENC_OUTPUT by passing x through PositionwiseFeedForward 
+
+
+
+
+
+DecoderLayer:
+    INPUT/SHAPES:
+        dec_input: [batch, len_q, dim_model]
+        slf_attn_mask: [batch, len_q, len_q]
+        enc_output: [batch, len_q, dim_model]
+        dec_enc_attn_mask: [batch, 1, len_q]
+        
+    OUTPUT/SHAPES: 
+        dec_output : [batch, len_q, dim_model]
+        dec_slf_attn : [batch, n_head, len_q, len_q]
+        dec_enc_attn : [batch, n_head, len_q, len_q]
+
+    MODULES:
+        MultiHeadAttention: slf_attn
+        MultiHeadAttention: enc_attn
+        PositionwiseFeedForward
+    
+    DESCRIPTION:
+        1: get x and DEC_SLF_ATTN by passing through slf_attn with q,k,v,mask = dec_input, dec_input, dec_input, slf_attn_mask
+        2: get x and DEC_ENC_ATTN by passing through enc_attn with q,k,v,mask = x, enc_output, enc_output, dec_enc_attn_mask
+        3: get DEC_OUTPUT by passing x through PositionwiseFeedForward 
+
+
+
+
+
+Encoder:
+    INPUT/SHAPES:
+        src_seq: [batch, len_q]
+        src_mask: [batch, 1, len_q]
+        
+    OUTPUT/SHAPES: 
+        enc_output : [batch, len_q, dim_model]
+
+    MODULES:
+        Embedding
+        PositionalEncoding
+        Dropout
+        n_layers x EncoderLayer
+        Layer_Norm
+    
+    DESCRIPTION:
+        1: get word_embeddings:[batch, len_q, dim_model] by passing src_seq to Embedding (Note: dim_model == dim_word_vec)
+        2: get positional_word_embeddings by passing word_embeddings to PositionalEncoding
+        3: apply dropout on positional_word_embeddings
+        4.1: get enc_output_1 by passing through EncoderLayer_1 with positional_word_embeddings and src_mask
+        ...
+        4.N: get ENC_OUTPUT by passing through EncoderLayer_N with enc_output_n-1 and src_mask
+        5: apply Layer_Norm on ENC_OUTPUT
+
+
+
+
+
+Decoder:
+    INPUT/SHAPES:
+        trg_seq: [batch, len_q]
+        trg_mask: [batch, len_q, len_q]
+        enc_output: [batch, len_q, dim_model]
+        src_mask: [batch, 1, len_q]
+        
+    OUTPUT/SHAPES: 
+        dec_output : [batch, len_q, dim_model]
+
+    MODULES:
+        Embedding
+        PositionalEncoding
+        Dropout
+        n_layers x DecoderLayer
+        Layer_Norm
+    
+    DESCRIPTION:
+        1: get word_embeddings:[batch, len_q, dim_model] by passing trg_seq to Embedding (Note: dim_model == dim_word_vec)
+        2: get positional_word_embeddings by passing word_embeddings to PositionalEncoding
+        3: apply dropout on positional_word_embeddings
+        4.1: get dec_output_1 by passing through DecoderLayer_1 with positional_word_embeddings, trg_mask, enc_output, and src_mask
+        ...
+        4.N: get DEC_OUTPUT by passing through DecoderLayer_N with dec_output_n-1, trg_mask, enc_output, and src_mask
+        5: apply Layer_Norm on DEC_OUTPUT
+
+
+
+
+
+Transformer:
+    INPUT/SHAPES:
+        src_seq: [batch, len_q]
+        trg_seq: [batch, len_q]
+        
+    OUTPUT/SHAPES: 
+        out_logits : [batch, len_q, num_of_words]
+
+    MODULES:
+        Encoder
+        Decoder
+        FC_out: dim_model x num_of_words
+    
+    DESCRIPTION:
+        1: calculate src_mask:[batch, 1, len_q] from src_seq
+        2: calculate trg_mask:[batch, len_q, len_q] from trg_seq
+        3: get enc_out[batch, len_q, dim_model] by passing through Encoder with src_seq and src_mask
+        4: get dec_out:[batch, len_q, dim_model] by passing through Decoder with trg_seq, trg_mask, enc_output, and src_mask
+        5: get OUT_LOGITS by passing dec_output through FC_out
+        (Note: to get output probabilities, apply softmax on last dim of OUT_LOGITS)
+        

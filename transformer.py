@@ -18,40 +18,8 @@ class Constants():
 
 
 
-
-'''FILE: modules.py'''
-
-class ScaledDotProductAttention(nn.Module):
-    ''' Scaled Dot-Product Attention '''
-
-    def __init__(self, temperature, attn_dropout=0.1):
-        super().__init__()
-        self.temperature = temperature
-        self.dropout = nn.Dropout(attn_dropout)
-
-    def forward(self, q, k, v, mask=None):
-#         print('scaleddpa', q.size(), k.size(), v.size())
-        attn = torch.matmul(q / self.temperature, k.transpose(2, 3))
-
-        if mask is not None:
-            print(mask.size(), q.size())
-            attn = attn.masked_fill(mask == 0, -1e9)
-
-        attn = self.dropout(F.softmax(attn, dim=-1))
-        output = torch.matmul(attn, v)
-#         print('scaleddpa out:', output.size(), attn.size())
-
-        return output, attn
-
-
-
-
-
 '''FILE: SubLayers.py'''
 ''' Define the sublayers in encoder/decoder layer '''
-
-# from transformer.Modules import ScaledDotProductAttention
-
 
 class MultiHeadAttention(nn.Module):
     ''' Multi-Head Attention module '''
@@ -68,7 +36,7 @@ class MultiHeadAttention(nn.Module):
         self.w_vs = nn.Linear(d_model, n_head * d_v, bias=False)
         self.fc = nn.Linear(n_head * d_v, d_model, bias=False)
 
-        self.attention = ScaledDotProductAttention(temperature=d_k ** 0.5)
+        self.attn_dropout = nn.Dropout(dropout)
 
         self.dropout = nn.Dropout(dropout)
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
@@ -93,17 +61,22 @@ class MultiHeadAttention(nn.Module):
         # Transpose for attention dot product: b x n x lq x dv
         q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
         
+        # ScaledDotProductAttention
+        attn = torch.matmul(q / (d_k**0.5), k.transpose(2, 3))
         if mask is not None:
             mask = mask.unsqueeze(1)   # For head axis broadcasting.
-
-        q, attn = self.attention(q, k, v, mask=mask)
+            # mask.size() during encoding: (16, 1, 1, xxx)
+            # mask.size() during decoding: (16, 1, xxx, xxx) if selfattention or (16, 1, 1, xxx) if enc_attention
+            attn = attn.masked_fill(mask == 0, -1e9)
+        attn = self.attn_dropout(F.softmax(attn, dim=-1))
+        q = torch.matmul(attn, v)
 
         # Transpose to move the head dimension back: b x lq x n x dv
         # Combine the last two dimensions to concatenate all the heads together: b x lq x (n*dv)
         q = q.transpose(1, 2).contiguous().view(sz_b, len_q, -1)
         q = self.dropout(self.fc(q))
+        print('q+residual', q.size(), residual.size())
         q += residual
-
         return q, attn
 
 
@@ -340,9 +313,7 @@ class Transformer(nn.Module):
         src_mask = get_pad_mask(src_seq, self.src_pad_idx)
         trg_mask = get_pad_mask(trg_seq, self.trg_pad_idx) & get_subsequent_mask(trg_seq)
 
-        print('forward transformer encode')
         enc_output, *_ = self.encoder(src_seq, src_mask)
-        print('forward transformer decode')
         dec_output, *_ = self.decoder(trg_seq, trg_mask, enc_output, src_mask)
         seq_logit = self.trg_word_prj(dec_output) * self.x_logit_scale
         # seq_logit.size() ([16, xxx, 9521]) 
