@@ -34,6 +34,7 @@ class ScaledDotProductAttention(nn.Module):
         attn = torch.matmul(q / self.temperature, k.transpose(2, 3))
 
         if mask is not None:
+            print(mask.size(), q.size())
             attn = attn.masked_fill(mask == 0, -1e9)
 
         attn = self.dropout(F.softmax(attn, dim=-1))
@@ -74,6 +75,8 @@ class MultiHeadAttention(nn.Module):
 
 
     def forward(self, q, k, v, mask=None):
+        
+        # q.size(), k.size(), v.size() == [16, xxx, 512] xxx length of longest sentance in batch
 
         d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
         sz_b, len_q, len_k, len_v = q.size(0), q.size(1), k.size(1), v.size(1)
@@ -224,7 +227,6 @@ class Encoder(nn.Module):
             d_model, d_inner, pad_idx, dropout=0.1, n_position=200):
 
         super().__init__()
-
         self.src_word_emb = nn.Embedding(n_src_vocab, d_word_vec, padding_idx=pad_idx)
         self.position_enc = PositionalEncoding(d_word_vec, n_position=n_position)
         self.dropout = nn.Dropout(p=dropout)
@@ -238,9 +240,7 @@ class Encoder(nn.Module):
         enc_slf_attn_list = []
 
         # -- Forward
-        
         enc_output = self.dropout(self.position_enc(self.src_word_emb(src_seq)))
-
         for enc_layer in self.layer_stack:
             enc_output, enc_slf_attn = enc_layer(enc_output, slf_attn_mask=src_mask)
             enc_slf_attn_list += [enc_slf_attn] if return_attns else []
@@ -335,13 +335,17 @@ class Transformer(nn.Module):
 
 
     def forward(self, src_seq, trg_seq):
-
+        # src_mask.size() == [16, 1, xxx], boolean, True means look False means a pad word
+        # trg_mask.size() == [16, xxx, xxx], boolean, first row is [T, F, ..., F] second row [T, T, F, ..., F], last row [T, T, ..., T] also change all T to F if pad word
         src_mask = get_pad_mask(src_seq, self.src_pad_idx)
         trg_mask = get_pad_mask(trg_seq, self.trg_pad_idx) & get_subsequent_mask(trg_seq)
 
+        print('forward transformer encode')
         enc_output, *_ = self.encoder(src_seq, src_mask)
+        print('forward transformer decode')
         dec_output, *_ = self.decoder(trg_seq, trg_mask, enc_output, src_mask)
         seq_logit = self.trg_word_prj(dec_output) * self.x_logit_scale
+        # seq_logit.size() ([16, xxx, 9521]) 
 
         return seq_logit.view(-1, seq_logit.size(2))
 
