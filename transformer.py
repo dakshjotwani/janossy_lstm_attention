@@ -75,7 +75,6 @@ class MultiHeadAttention(nn.Module):
         # Combine the last two dimensions to concatenate all the heads together: b x lq x (n*dv)
         q = q.transpose(1, 2).contiguous().view(sz_b, len_q, -1)
         q = self.dropout(self.fc(q))
-        print('q+residual', q.size(), residual.size())
         q += residual
         return q, attn
 
@@ -322,7 +321,50 @@ class Transformer(nn.Module):
 
     
     
-    
+class Transformer_embed_ready_test(nn.Module):
+
+    def __init__(
+            self, d_model=512, d_inner=2048,
+            n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1):
+
+        super().__init__()
+
+        self.enc_layer_stack = nn.ModuleList([
+            EncoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
+            for _ in range(n_layers)])
+
+        self.dec_layer_stack = nn.ModuleList([
+            DecoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
+            for _ in range(n_layers)])
+
+        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
+        self.trg_word_prj = nn.Linear(d_model, 1, bias=False)
+
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p) 
+
+
+    def forward(self, src_seq, trg_seq):
+        # trg_mask = get_subsequent_mask(trg_seq[:,:,0])
+        enc_output = src_seq
+        for enc_layer in self.enc_layer_stack:
+            enc_output, _ = enc_layer(enc_output)
+
+        enc_output = self.layer_norm(enc_output)
+
+        # dec_output = trg_seq
+        # for dec_layer in self.dec_layer_stack:
+        #     dec_output, dec_slf_attn, dec_enc_attn = dec_layer(
+        #         dec_output, enc_output, slf_attn_mask=trg_mask)
+
+        # dec_output = self.layer_norm(dec_output)
+
+        seq_logit = self.trg_word_prj(enc_output)
+
+        result = torch.tanh(seq_logit)
+        result = torch.log((result+1)/(1-result))
+        return seq_logit
 
 
 
