@@ -59,7 +59,8 @@ class janossyLastOnlyLSTM(nn.Module):
 
 
 
-def get_trainloader_test():
+def get_trainloader_test(seed=42):
+    torch.manual_seed(seed)
     def create_data(num_examples, seq_len, n_dim, std):
         train_x = torch.normal(torch.zeros(seq_len*n_dim*num_examples), torch.ones(seq_len*n_dim*num_examples)*std).view(num_examples, seq_len, n_dim)
         means = torch.mean(train_x, dim=2)
@@ -111,9 +112,13 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available else 'cpu')
     # device = 'cpu'
 
-    trainloader = get_trainloader_test()
+    trainloader = get_trainloader_test(42)
     trainloader.dataset.x = trainloader.dataset.x.to(device)
     trainloader.dataset.y = trainloader.dataset.y.to(device)
+    validloader = get_trainloader_test(420)
+    validloader.dataset.x = validloader.dataset.x.to(device)
+    validloader.dataset.y = validloader.dataset.y.to(device)
+
     n_dim = trainloader.dataset.x.size()[-1]
     # model = janossyLSTM(n_dim, 1, janossy_count=2)
 
@@ -144,6 +149,8 @@ if __name__ == '__main__':
             if epoch%20==0 and i==0:
                 print()
                 print('loss:', loss.item())
+                valid_loss = loss_function(model(validloader.dataset.x), validloader.dataset.y)
+                print('valid loss:', valid_loss.item())
                 print(' y :', mini_y[:1, :5].squeeze().data.cpu().numpy())
                 print('out:', out[:1, :5].squeeze().data.cpu().numpy())
                 print('dlt:', (out[:1, :5]-mini_y[:1, :5]).squeeze().data.cpu().numpy())
