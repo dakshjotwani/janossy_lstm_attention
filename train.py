@@ -15,6 +15,7 @@ from torchtext.datasets import TranslationDataset
 '''FILE: Train.py'''
 
 from transformer import Constants, Transformer, ScheduledOptim
+import lstm_tran
 # import transformer.Constants as Constants
 # from transformer.Models import Transformer
 # from transformer.Optim import ScheduledOptim
@@ -232,6 +233,7 @@ def main():
     parser.add_argument('-copy_opt', action='store_true')
 
     parser.add_argument('-no_cuda', action='store_true')
+    parser.add_argument('-lstm', action='store_true')
     parser.add_argument('-label_smoothing', action='store_true')
 
     opt = parser.parse_args()
@@ -273,21 +275,40 @@ def main():
 
     print(opt)
 
-    transformer = Transformer(
-        opt.src_vocab_size,
-        opt.trg_vocab_size,
-        src_pad_idx=opt.src_pad_idx,
-        trg_pad_idx=opt.trg_pad_idx,
-        trg_emb_prj_weight_sharing=opt.proj_share_weight,
-        emb_src_trg_weight_sharing=opt.embs_share_weight,
-        d_k=opt.d_k,
-        d_v=opt.d_v,
-        d_model=opt.d_model,
-        d_word_vec=opt.d_word_vec,
-        d_inner=opt.d_inner_hid,
-        n_layers=opt.n_layers,
-        n_head=opt.n_head,
-        dropout=opt.dropout).to(device)
+    if opt.lstm:
+        print('Using LSTM')
+        transformer = lstm_tran.Transformer(
+            opt.src_vocab_size,
+            opt.trg_vocab_size,
+            src_pad_idx=opt.src_pad_idx,
+            trg_pad_idx=opt.trg_pad_idx,
+            trg_emb_prj_weight_sharing=opt.proj_share_weight,
+            emb_src_trg_weight_sharing=opt.embs_share_weight,
+            d_k=opt.d_k,
+            d_v=opt.d_v,
+            d_model=opt.d_model,
+            d_word_vec=opt.d_word_vec,
+            d_inner=opt.d_inner_hid,
+            n_layers=opt.n_layers,
+            n_head=opt.n_head,
+            dropout=opt.dropout).to(device)
+    else:
+        transformer = Transformer(
+            opt.src_vocab_size,
+            opt.trg_vocab_size,
+            src_pad_idx=opt.src_pad_idx,
+            trg_pad_idx=opt.trg_pad_idx,
+            trg_emb_prj_weight_sharing=opt.proj_share_weight,
+            emb_src_trg_weight_sharing=opt.embs_share_weight,
+            d_k=opt.d_k,
+            d_v=opt.d_v,
+            d_model=opt.d_model,
+            d_word_vec=opt.d_word_vec,
+            d_inner=opt.d_inner_hid,
+            n_layers=opt.n_layers,
+            n_head=opt.n_head,
+            dropout=opt.dropout).to(device)
+
 
     optimizer = ScheduledOptim(
         optim.Adam(transformer.parameters(), betas=(0.9, 0.98), eps=1e-09),

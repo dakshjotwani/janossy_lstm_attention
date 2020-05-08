@@ -23,7 +23,7 @@ MultiHeadAttention:
         1: apply Layer_Norm on q
         2: pass q,k,v each through FC to get [batch, len_q, n_head, dim_k/dim_v]
         3: transpose q/k/v q:[batch, n_head, len_q, dim_k] k:[batch, n_head, dim_k, len_q] v:[batch, n_head, len_q, dim_v]
-        4: get ATTN by (q/(dim_q**0.5) X k) to get [batch, n_head, len_q, len_q]
+        4: get ATTN by (q/(dim_k**0.5) X k) to get [batch, n_head, len_q, len_q]
         5: mask ATTN
         6: apply softmax on last ATTN dim
         7: apply dropout on ATTN
